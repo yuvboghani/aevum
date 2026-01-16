@@ -73,18 +73,5 @@
             "source": "/(.*)",
             "destination": "/index.html"
         }
-    ],
-    "builds": [
-        {
-            "src": "api/index.py",
-            "use": "@vercel/python"
-        },
-        {
-            "src": "psu-scheduler-client/package.json",
-            "use": "@vercel/static-build",
-            "config": {
-                "distDir": "dist"
-            }
-        }
     ]
 }
