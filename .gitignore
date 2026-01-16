@@ -1,0 +1,26 @@
+# Python & Backend
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+env/
+.env
+client_secrets.json
+*.db
+*.sqlite3
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Editor
+.vscode/
+.idea/
+
+# Frontend (The client folder ITSELF is included, but we ignore its build artifacts)
+psu-scheduler-client/node_modules/
+psu-scheduler-client/dist/
+psu-scheduler-client/.env

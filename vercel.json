@@ -1,0 +1,50 @@
+{
+    "version": 2,
+    "rewrites": [
+        {
+            "source": "/api/(.*)",
+            "destination": "/api/index.py"
+        },
+        {
+            "source": "/login",
+            "destination": "/api/index.py"
+        },
+        {
+            "source": "/callback",
+            "destination": "/api/index.py"
+        },
+        {
+            "source": "/busy",
+            "destination": "/api/index.py"
+        },
+        {
+            "source": "/tasks(.*)",
+            "destination": "/api/index.py"
+        },
+        {
+            "source": "/calendars",
+            "destination": "/api/index.py"
+        },
+        {
+            "source": "/optimize(.*)",
+            "destination": "/api/index.py"
+        },
+        {
+            "source": "/(.*)",
+            "destination": "/psu-scheduler-client/index.html"
+        }
+    ],
+    "builds": [
+        {
+            "src": "api/index.py",
+            "use": "@vercel/python"
+        },
+        {
+            "src": "psu-scheduler-client/package.json",
+            "use": "@vercel/static-build",
+            "config": {
+                "distDir": "dist"
+            }
+        }
+    ]
+}
