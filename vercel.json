@@ -55,6 +55,10 @@
             "destination": "/psu-scheduler-client/assets/$1"
         },
         {
+            "source": "/psu-scheduler-client/assets/(.*)",
+            "destination": "/psu-scheduler-client/assets/$1"
+        },
+        {
             "source": "/assets/(.*)",
             "destination": "/psu-scheduler-client/assets/$1"
         },
