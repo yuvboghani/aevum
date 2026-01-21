@@ -54,6 +54,10 @@ services:
       OAUTH_REDIRECT_URI: http://localhost:8000/callback
       # Frontend URL for CORS
       FRONTEND_URL: http://localhost:5173
+      # Z.ai LLM Configuration
+      ZAI_API_KEY: ${ZAI_API_KEY:-cd596480363b4730bc4ba65c7585c3bd.iRCenjxenwDxiktj}
+      ZAI_BASE_URL: https://api.z.ai/api/paas/v4/
+      ZAI_DEFAULT_MODEL: glm-4.5-air
       # Debug mode
       SQL_DEBUG: "false"
     ports:
@@ -90,3 +94,5 @@ services:
 volumes:
   postgres_data:
     name: aevum_postgres_data
+  ollama_data:
+    name: aevum_ollama_data

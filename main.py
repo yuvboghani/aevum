@@ -27,6 +27,9 @@ from database import get_db, create_tables, engine
 from models import Task as TaskModel, WorkType as ModelWorkType, Base
 from heuristic_engine import HeuristicScheduler, Task as EngineTask, WorkType as EngineWorkType
 
+# LLM Integration (Z.ai via OpenAI-compatible SDK)
+from openai import OpenAI
+
 # --- CONFIGURATION ---
 os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'  # Allow HTTP for local dev
 
@@ -698,6 +701,361 @@ def optimize_from_database(
             for s in optimized_schedule
         ]
     }
+
+
+# --- AI ASSISTANT ROUTES ---
+from llm_client import (
+    OllamaClient, 
+    get_ollama_client, 
+    AIAssistantRequest, 
+    LLMScheduleResponse,
+    TaskSuggestion,
+    TaskAction
+)
+
+
+class AIHealthResponse(BaseModel):
+    """Response for AI health check"""
+    status: str
+    ollama_available: bool
+    model: str
+
+
+@app.get("/ai/health", response_model=AIHealthResponse)
+async def ai_health_check():
+    """Check if Ollama LLM is available"""
+    client = get_ollama_client()
+    is_healthy = await client.check_health()
+    
+    return AIHealthResponse(
+        status="healthy" if is_healthy else "ollama_unavailable",
+        ollama_available=is_healthy,
+        model=client.model
+    )
+
+
+@app.post("/ai/assist", response_model=LLMScheduleResponse)
+async def ai_assist(
+    request: AIAssistantRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    AI Assistant endpoint - "Protocol Buffer" pattern.
+    
+    Receives:
+    - User prompt from Tactical Tablet UI
+    - Current schedule as JSON
+    
+    Returns:
+    - Structured JSON response with task suggestions and insights
+    - Guaranteed to match LLMScheduleResponse schema for Heuristic Engine
+    """
+    client = get_ollama_client()
+    
+    # Check if Ollama is available
+    if not await client.check_health():
+        return LLMScheduleResponse(
+            summary="AI assistant is currently unavailable. Ollama may not be running.",
+            task_suggestions=[],
+            insights=[]
+        )
+    
+    # If no schedule provided, fetch from database
+    if not request.current_schedule:
+        db_tasks = db.query(TaskModel).filter(TaskModel.is_completed == False).all()
+        request.current_schedule = [t.to_dict() for t in db_tasks]
+    
+    # Get structured response from LLM
+    response = await client.generate_structured(request)
+    
+    return response
+
+
+@app.post("/ai/apply-suggestions")
+async def apply_ai_suggestions(
+    suggestions: List[TaskSuggestion],
+    db: Session = Depends(get_db)
+):
+    """
+    Apply AI-suggested task modifications to the database.
+    
+    This endpoint allows the user to "accept" AI suggestions,
+    which are then executed against the real database.
+    """
+    results = []
+    
+    for suggestion in suggestions:
+        try:
+            if suggestion.action == TaskAction.CREATE:
+                # Create new task
+                new_task = TaskModel(
+                    title=suggestion.title or "Untitled Task",
+                    estimated_minutes=suggestion.estimated_minutes or 60,
+                    priority=suggestion.priority or 5,
+                    deadline=datetime.datetime.fromisoformat(suggestion.deadline) if suggestion.deadline else datetime.datetime.now() + datetime.timedelta(days=1),
+                    work_type=ModelWorkType.DEEP_WORK if suggestion.work_type == "Deep Work" else ModelWorkType.SHALLOW_WORK,
+                    is_completed=False
+                )
+                db.add(new_task)
+                db.commit()
+                db.refresh(new_task)
+                results.append({"action": "create", "task_id": new_task.id, "status": "success"})
+                
+            elif suggestion.action == TaskAction.UPDATE and suggestion.task_id:
+                task = db.query(TaskModel).filter(TaskModel.id == suggestion.task_id).first()
+                if task:
+                    if suggestion.title:
+                        task.title = suggestion.title
+                    if suggestion.estimated_minutes:
+                        task.estimated_minutes = suggestion.estimated_minutes
+                    if suggestion.priority:
+                        task.priority = suggestion.priority
+                    if suggestion.deadline:
+                        task.deadline = datetime.datetime.fromisoformat(suggestion.deadline)
+                    if suggestion.work_type:
+                        task.work_type = ModelWorkType.DEEP_WORK if suggestion.work_type == "Deep Work" else ModelWorkType.SHALLOW_WORK
+                    db.commit()
+                    results.append({"action": "update", "task_id": suggestion.task_id, "status": "success"})
+                else:
+                    results.append({"action": "update", "task_id": suggestion.task_id, "status": "not_found"})
+                    
+            elif suggestion.action == TaskAction.DELETE and suggestion.task_id:
+                task = db.query(TaskModel).filter(TaskModel.id == suggestion.task_id).first()
+                if task:
+                    db.delete(task)
+                    db.commit()
+                    results.append({"action": "delete", "task_id": suggestion.task_id, "status": "success"})
+                else:
+                    results.append({"action": "delete", "task_id": suggestion.task_id, "status": "not_found"})
+                    
+            elif suggestion.action == TaskAction.COMPLETE and suggestion.task_id:
+                task = db.query(TaskModel).filter(TaskModel.id == suggestion.task_id).first()
+                if task:
+                    task.is_completed = True
+                    db.commit()
+                    results.append({"action": "complete", "task_id": suggestion.task_id, "status": "success"})
+                else:
+                    results.append({"action": "complete", "task_id": suggestion.task_id, "status": "not_found"})
+                    
+            elif suggestion.action in [TaskAction.RESCHEDULE, TaskAction.PRIORITIZE] and suggestion.task_id:
+                # These are treated as updates
+                task = db.query(TaskModel).filter(TaskModel.id == suggestion.task_id).first()
+                if task:
+                    if suggestion.deadline:
+                        task.deadline = datetime.datetime.fromisoformat(suggestion.deadline)
+                    if suggestion.priority:
+                        task.priority = suggestion.priority
+                    db.commit()
+                    results.append({"action": suggestion.action.value, "task_id": suggestion.task_id, "status": "success"})
+                else:
+                    results.append({"action": suggestion.action.value, "task_id": suggestion.task_id, "status": "not_found"})
+                    
+        except Exception as e:
+            results.append({
+                "action": suggestion.action.value,
+                "task_id": suggestion.task_id,
+                "status": "error",
+                "message": str(e)
+            })
+    
+    return {
+        "applied": len([r for r in results if r.get("status") == "success"]),
+        "failed": len([r for r in results if r.get("status") != "success"]),
+        "results": results
+    }
+
+
+# =============================================================================
+# AEVUM PROJECT ARCHITECT - LLM INTEGRATION
+# =============================================================================
+
+# --- Z.ai LLM Configuration ---
+ZAI_API_KEY = os.getenv("ZAI_API_KEY", "")
+ZAI_BASE_URL = os.getenv("ZAI_BASE_URL", "https://api.z.ai/api/paas/v4/")
+ZAI_MODEL = os.getenv("ZAI_DEFAULT_MODEL", "glm-4.5-air")
+
+# Initialize OpenAI-compatible client for Z.ai
+llm_client = None
+if ZAI_API_KEY:
+    llm_client = OpenAI(
+        api_key=ZAI_API_KEY,
+        base_url=ZAI_BASE_URL
+    )
+
+# --- Aevum Project Architect System Prompt ---
+ARCHITECT_SYSTEM_PROMPT = """You are the "Aevum Project Architect." Your goal is to analyze high-level objectives and decompose them into actionable, scheduled plans.
+
+## Task Decomposition Rules:
+- **Breaking Down Large Goals**: If a user provides a broad goal (e.g., "Build a Piano Learning App"), identify logical sub-phases: Research, Planning, Frontend Development, and Backend Implementation.
+- **Time Estimation**: Assign realistic time blocks (in minutes) to each sub-task based on common software engineering practices.
+
+## Operational Guardrails:
+- **Academic Priority**: Never suggest work during the user's Penn State class schedule or university commitments.
+- **Cognitive Load**: Identify tasks as "Deep Work" or "Shallow Work." Do not schedule more than 4 hours of Deep Work in a single day.
+- **Clarity**: If a goal is too vague, ask a specific follow-up question instead of making assumptions.
+
+## Response Format:
+When decomposing tasks, respond with a structured JSON format:
+```json
+{
+  "project_name": "Project Title",
+  "phases": [
+    {
+      "phase": "I. Planning",
+      "tasks": [
+        {"title": "Task Name", "duration_minutes": 120, "work_type": "Deep Work", "depends_on": null}
+      ]
+    }
+  ],
+  "summary": "Brief explanation of the plan"
+}
+```
+
+For conversational responses, just reply naturally. Only use the JSON format when actively planning tasks."""
+
+
+class ArchitectMessage(BaseModel):
+    """Schema for chat messages to the Architect"""
+    role: str = Field(..., pattern="^(user|assistant|system)$")
+    content: str
+
+
+class ArchitectRequest(BaseModel):
+    """Schema for Architect chat request"""
+    messages: List[ArchitectMessage]
+    include_context: bool = True  # Include task history in context
+
+
+class ArchitectResponse(BaseModel):
+    """Schema for Architect response"""
+    message: str
+    tasks_suggested: Optional[List[dict]] = None
+    model_used: str
+
+
+@app.post("/architect/chat", response_model=ArchitectResponse, tags=["AI Architect"])
+async def architect_chat(
+    request: ArchitectRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Chat with the Aevum Project Architect AI.
+    
+    The AI can:
+    - Decompose large projects into actionable tasks
+    - Suggest optimal scheduling based on work type
+    - Reference your existing task history for context
+    """
+    if not llm_client:
+        raise HTTPException(
+            status_code=503,
+            detail="LLM service not configured. Please set ZAI_API_KEY environment variable."
+        )
+    
+    # Build context from existing tasks if requested
+    context = ""
+    if request.include_context:
+        pending_tasks = db.query(TaskModel).filter(TaskModel.is_completed == False).all()
+        if pending_tasks:
+            context = "\n\n## Your Current Pending Tasks:\n"
+            for task in pending_tasks:
+                context += f"- {task.title} ({task.estimated_minutes}min, {task.work_type.value}, Priority: {task.priority})\n"
+    
+    # Build messages for the API
+    messages = [
+        {"role": "system", "content": ARCHITECT_SYSTEM_PROMPT + context}
+    ]
+    
+    for msg in request.messages:
+        messages.append({"role": msg.role, "content": msg.content})
+    
+    try:
+        # Call Z.ai LLM
+        completion = llm_client.chat.completions.create(
+            model=ZAI_MODEL,
+            messages=messages,
+            temperature=0.7,
+            max_tokens=2000
+        )
+        
+        response_content = completion.choices[0].message.content
+        
+        # Try to extract tasks if response contains JSON
+        tasks_suggested = None
+        if "```json" in response_content:
+            import json
+            try:
+                json_start = response_content.find("```json") + 7
+                json_end = response_content.find("```", json_start)
+                json_str = response_content[json_start:json_end].strip()
+                parsed = json.loads(json_str)
+                if "phases" in parsed:
+                    tasks_suggested = []
+                    for phase in parsed["phases"]:
+                        for task in phase.get("tasks", []):
+                            tasks_suggested.append({
+                                "phase": phase["phase"],
+                                **task
+                            })
+            except:
+                pass  # If JSON parsing fails, just return the message
+        
+        return ArchitectResponse(
+            message=response_content,
+            tasks_suggested=tasks_suggested,
+            model_used=ZAI_MODEL
+        )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"LLM request failed: {str(e)}"
+        )
+
+
+@app.get("/architect/test", tags=["AI Architect"])
+async def test_architect_connection():
+    """
+    Test the connection to the Z.ai LLM service.
+    Returns the model info and a simple test response.
+    """
+    if not llm_client:
+        return {
+            "status": "not_configured",
+            "message": "ZAI_API_KEY not set",
+            "base_url": ZAI_BASE_URL,
+            "model": ZAI_MODEL
+        }
+    
+    try:
+        # Simple test message
+        completion = llm_client.chat.completions.create(
+            model=ZAI_MODEL,
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant. Respond briefly."},
+                {"role": "user", "content": "Say 'Aevum Architect ready!' and nothing else."}
+            ],
+            max_tokens=50
+        )
+        
+        return {
+            "status": "connected",
+            "model": ZAI_MODEL,
+            "base_url": ZAI_BASE_URL,
+            "test_response": completion.choices[0].message.content,
+            "usage": {
+                "prompt_tokens": completion.usage.prompt_tokens,
+                "completion_tokens": completion.usage.completion_tokens
+            }
+        }
+        
+    except Exception as e:
+        return {
+            "status": "error",
+            "model": ZAI_MODEL,
+            "base_url": ZAI_BASE_URL,
+            "error": str(e)
+        }
 
 
 # --- MAIN ---
