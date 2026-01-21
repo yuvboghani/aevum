@@ -302,6 +302,13 @@ def get_ollama_client() -> ZaiClient:
     return _zai_client
 
 
+# Aliases for backward compatibility
+OllamaClient = ZaiClient
+get_zai_client = get_ollama_client
+        _zai_client = ZaiClient()
+    return _zai_client
+
+
 # Alias for clarity
 def get_zai_client() -> ZaiClient:
     return get_ollama_client()
