@@ -52,15 +52,19 @@
         },
         {
             "source": "/aevum/assets/(.*)",
-            "destination": "/assets/$1"
+            "destination": "/psu-scheduler-client/assets/$1"
         },
         {
             "source": "/assets/(.*)",
-            "destination": "/assets/$1"
+            "destination": "/psu-scheduler-client/assets/$1"
+        },
+        {
+            "source": "/aevum/(.*)",
+            "destination": "/psu-scheduler-client/index.html"
         },
         {
             "source": "/(.*)",
-            "destination": "/index.html"
+            "destination": "/psu-scheduler-client/index.html"
         }
     ]
 }
