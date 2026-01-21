@@ -1,5 +1,18 @@
 {
     "version": 2,
+    "builds": [
+        {
+            "src": "psu-scheduler-client/package.json",
+            "use": "@vercel/static-build",
+            "config": {
+                "distDir": "dist"
+            }
+        },
+        {
+            "src": "api/index.py",
+            "use": "@vercel/python"
+        }
+    ],
     "rewrites": [
         {
             "source": "/api/(.*)",
@@ -30,20 +43,24 @@
             "destination": "/api/index.py"
         },
         {
+            "source": "/ai/(.*)",
+            "destination": "/api/index.py"
+        },
+        {
+            "source": "/architect/(.*)",
+            "destination": "/api/index.py"
+        },
+        {
             "source": "/aevum/assets/(.*)",
-            "destination": "/assets/$1"
+            "destination": "/psu-scheduler-client/dist/assets/$1"
         },
         {
-            "source": "/aevum/(.*)",
-            "destination": "/index.html"
-        },
-        {
-            "source": "/aevum",
-            "destination": "/index.html"
+            "source": "/assets/(.*)",
+            "destination": "/psu-scheduler-client/dist/assets/$1"
         },
         {
             "source": "/(.*)",
-            "destination": "/index.html"
+            "destination": "/psu-scheduler-client/dist/index.html"
         }
     ]
 }
