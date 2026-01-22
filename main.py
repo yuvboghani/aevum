@@ -717,20 +717,20 @@ from llm_client import (
 class AIHealthResponse(BaseModel):
     """Response for AI health check"""
     status: str
-    ollama_available: bool
+    ai_available: bool
     model: str
 
 
 @app.get("/ai/health", response_model=AIHealthResponse)
 async def ai_health_check():
-    """Check if Ollama LLM is available"""
+    """Check if AI Service is available"""
     client = get_ollama_client()
     is_healthy = await client.check_health()
     
     return AIHealthResponse(
-        status="healthy" if is_healthy else "ollama_unavailable",
-        ollama_available=is_healthy,
-        model=client.model
+        status="healthy" if is_healthy else "ai_unavailable",
+        ai_available=is_healthy,
+        model=client.default_model if hasattr(client, 'default_model') else "unknown"
     )
 
 
@@ -752,10 +752,10 @@ async def ai_assist(
     """
     client = get_ollama_client()
     
-    # Check if Ollama is available
+    # Check if AI is available
     if not await client.check_health():
         return LLMScheduleResponse(
-            summary="AI assistant is currently unavailable. Ollama may not be running.",
+            summary="AI assistant is currently unavailable. Z.ai service may be offline.",
             task_suggestions=[],
             insights=[]
         )

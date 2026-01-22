@@ -108,37 +108,54 @@ function AIAssistantBar({ onAddTask, onOptimize, onMoveTask }) {
         { role: 'assistant', text: "Hi! I'm your AI assistant. Ask me to help organize your tasks or suggest optimizations." }
     ]);
 
-    const handleSubmit = (e) => {
+    const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
+
+    const handleSubmit = async (e) => {
         e.preventDefault();
         if (!inputValue.trim()) return;
 
-        // Add user message
-        setMessages(prev => [...prev, { role: 'user', text: inputValue }]);
-
-        const lowerInput = inputValue.toLowerCase();
-
-        // Basic Agent Parsing Simulation
-        if (lowerInput.includes('optimize') || lowerInput.includes('schedule')) {
-            if (onOptimize) onOptimize();
-            setTimeout(() => setMessages(prev => [...prev, { role: 'assistant', text: "I'm optimizing your schedule now..." }]), 500);
-        }
-        else if (lowerInput.startsWith('add ')) {
-            const title = inputValue.substring(4);
-            if (onAddTask) onAddTask({ title });
-            setTimeout(() => setMessages(prev => [...prev, { role: 'assistant', text: `I've added "${title}" to your tasks.` }]), 500);
-        }
-        else if (lowerInput.includes('move')) {
-            setTimeout(() => setMessages(prev => [...prev, { role: 'assistant', text: "I can help with that!" }]), 500);
-        }
-        else {
-            // Simulate AI response
-            setTimeout(() => setMessages(prev => [...prev, {
-                role: 'assistant',
-                text: `I'll help you with "${inputValue}". Let me analyze your schedule...`
-            }]), 1000);
-        }
-
+        const userText = inputValue;
+        setMessages(prev => [...prev, { role: 'user', text: userText }]);
         setInputValue('');
+
+        // Show loading state
+        setMessages(prev => [...prev, { role: 'assistant', text: "Thinking..." }]);
+
+        try {
+            // Call Backend Protocol Buffer
+            const response = await axios.post(`${API_URL}/ai/assist`, {
+                prompt: userText,
+                current_schedule: [], // Backend will fetch DB tasks if this is empty
+                context: {
+                    frontend_view: "tactical_tablet"
+                }
+            });
+
+            // Remove "Thinking..." and show real response
+            setMessages(prev => {
+                const newMsgs = prev.filter(m => m.text !== "Thinking...");
+                return [...newMsgs, {
+                    role: 'assistant',
+                    text: response.data.summary || "I processed your request."
+                }];
+            });
+
+            // If suggestions exist, we might want to auto-refresh or notify
+            if (response.data.task_suggestions?.length > 0) {
+                // For now, simpler integration: just notify user
+                // Future: Prompt to apply changes
+            }
+
+        } catch (error) {
+            console.error("AI Error:", error);
+            setMessages(prev => {
+                const newMsgs = prev.filter(m => m.text !== "Thinking...");
+                return [...newMsgs, {
+                    role: 'assistant',
+                    text: "Sorry, I couldn't connect to the AI service at the moment."
+                }];
+            });
+        }
     };
 
     return (

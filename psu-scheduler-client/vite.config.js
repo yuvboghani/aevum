@@ -4,6 +4,6 @@ import react from '@vitejs/plugin-react'
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react()],
-  base: '/', // Reset to root for basic Vercel deployment stability
+  base: '/aevum/', // Subpath deployment on yuvboghani.com/aevum
 })
 
