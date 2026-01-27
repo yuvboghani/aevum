@@ -4,7 +4,7 @@ import axios from 'axios';
 import { format, parseISO, isToday, isTomorrow, differenceInDays, isPast } from 'date-fns';
 
 // --- CONFIG ---
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
+const API_URL = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? "/aevum" : "http://localhost:8000");
 axios.defaults.withCredentials = true;
 
 // --- WORK TYPES ---

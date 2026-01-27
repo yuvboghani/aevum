@@ -1,7 +1,7 @@
 import React from 'react';
 
 // --- CONFIG ---
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
+const API_URL = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? "/aevum" : "http://localhost:8000");
 
 const CalendarIcon = () => (
     <svg className="w-12 h-12 text-[#FF6B2C]" fill="none" viewBox="0 0 24 24" stroke="currentColor">

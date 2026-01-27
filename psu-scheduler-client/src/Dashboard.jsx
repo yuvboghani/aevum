@@ -13,7 +13,7 @@ import {
 import { CriticalSidebar } from './components/CriticalSidebar';
 
 // --- CONFIG ---
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
+const API_URL = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? "/aevum" : "http://localhost:8000");
 axios.defaults.withCredentials = true;
 
 // --- TIME SLOTS CONFIG ---

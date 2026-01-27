@@ -108,7 +108,7 @@ function AIAssistantBar({ onAddTask, onOptimize, onMoveTask }) {
         { role: 'assistant', text: "Hi! I'm your AI assistant. Ask me to help organize your tasks or suggest optimizations." }
     ]);
 
-    const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
+    const API_URL = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? "/aevum" : "http://localhost:8000");
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -268,7 +268,7 @@ function AppViews() {
     const [isOptimizing, setIsOptimizing] = useState(false);
     const [refreshKey, setRefreshKey] = useState(0);
 
-    const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
+    const API_URL = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? "/aevum" : "http://localhost:8000");
     axios.defaults.withCredentials = true;
 
     // Sync URL with active view
