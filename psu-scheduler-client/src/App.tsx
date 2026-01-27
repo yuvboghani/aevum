@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
@@ -6,6 +6,7 @@ import LandingPage from './LandingPage';
 import Dashboard from './Dashboard';
 import Canvas from './Canvas';
 import './Dock.css';
+import { WorkType } from './types';
 
 // Icons
 const CalendarIcon = () => (
@@ -38,14 +39,17 @@ const BellIcon = () => (
     </svg>
 );
 
-// --- WORK TYPES ---
-const WORK_TYPES = {
-    DEEP_WORK: "Deep Work",
-    SHALLOW_WORK: "Shallow Work"
-};
+
+
+interface ViewProps {
+    onRegenerate: () => void;
+    isOptimizing: boolean;
+    activeView: string;
+    onViewChange: (view: string) => void;
+}
 
 // --- STATIC TOP BANNER ---
-function AppHeader({ onRegenerate, isOptimizing, activeView, onViewChange }) {
+function AppHeader({ onRegenerate, isOptimizing, activeView, onViewChange }: ViewProps) {
     return (
         <header className="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-sm border-b border-gray-100">
             <div className="max-w-[1800px] mx-auto px-6 py-2 flex items-center justify-between h-[64px]">
@@ -100,8 +104,14 @@ function AppHeader({ onRegenerate, isOptimizing, activeView, onViewChange }) {
     );
 }
 
+interface AssistantProps {
+    onAddTask: (task: any) => Promise<void>;
+    onOptimize: () => void;
+    onMoveTask?: () => void;
+}
+
 // --- STATIC AI ASSISTANT ---
-function AIAssistantBar({ onAddTask, onOptimize, onMoveTask }) {
+function AIAssistantBar({ onAddTask: _onAddTask, onOptimize: _onOptimize, onMoveTask: _onMoveTask }: AssistantProps) {
     const [isExpanded, setIsExpanded] = useState(false);
     const [inputValue, setInputValue] = useState('');
     const [messages, setMessages] = useState([
@@ -111,7 +121,7 @@ function AIAssistantBar({ onAddTask, onOptimize, onMoveTask }) {
     // Strictly enforce relative path in PROD to use the proxy, ignoring any auto-set env vars
     const API_URL = import.meta.env.PROD ? "/aevum" : (import.meta.env.VITE_API_URL || "http://localhost:8000");
 
-    const handleSubmit = async (e) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!inputValue.trim()) return;
 
@@ -237,8 +247,13 @@ function AIAssistantBar({ onAddTask, onOptimize, onMoveTask }) {
 }
 
 
+interface DockProps {
+    activeView: string;
+    onViewChange: (view: string) => void;
+}
+
 // View Dock Navigation Component
-function ViewDock({ activeView, onViewChange }) {
+function ViewDock({ activeView, onViewChange }: DockProps) {
     return (
         <div className="view-dock">
             <button
@@ -263,7 +278,7 @@ function ViewDock({ activeView, onViewChange }) {
 function AppViews() {
     const location = useLocation();
     const navigate = useNavigate();
-    const [activeView, setActiveView] = useState(
+    const [activeView, setActiveView] = useState<string>(
         location.pathname === '/canvas' ? 'canvas' : 'dashboard'
     );
     const [isOptimizing, setIsOptimizing] = useState(false);
@@ -290,7 +305,7 @@ function AppViews() {
         }
     }, [location.pathname]);
 
-    const handleViewChange = (view) => {
+    const handleViewChange = (view: string) => {
         setActiveView(view);
     };
 
@@ -307,13 +322,13 @@ function AppViews() {
         }
     };
 
-    const addTask = async (taskData) => {
+    const addTask = async (taskData: any) => {
         const newTask = {
             title: taskData.title || "New Task",
             estimated_minutes: taskData.estimated_minutes || 30,
             priority: 5,
             deadline: new Date().toISOString(),
-            work_type: WORK_TYPES.SHALLOW_WORK,
+            work_type: WorkType.SHALLOW_WORK,
             ...taskData
         };
 

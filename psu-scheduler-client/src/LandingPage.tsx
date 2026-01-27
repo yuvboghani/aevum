@@ -1,14 +1,10 @@
-import React from 'react';
+
 
 // --- CONFIG ---
 // Strictly enforce relative path in PROD to use the proxy
 const API_URL = import.meta.env.PROD ? "/aevum" : (import.meta.env.VITE_API_URL || "http://localhost:8000");
 
-const CalendarIcon = () => (
-    <svg className="w-12 h-12 text-[#FF6B2C]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-    </svg>
-);
+
 
 const BrainIcon = () => (
     <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">

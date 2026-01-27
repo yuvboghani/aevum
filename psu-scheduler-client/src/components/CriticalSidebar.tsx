@@ -1,5 +1,6 @@
 import React from 'react';
 import { differenceInDays, isPast, isToday, parseISO } from 'date-fns';
+import { Task } from '../types';
 
 const AlertIcon = () => (
     <svg className="w-5 h-5 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -7,7 +8,11 @@ const AlertIcon = () => (
     </svg>
 );
 
-export const CriticalSidebar = ({ tasks }) => {
+interface SidebarProps {
+    tasks: Task[];
+}
+
+export const CriticalSidebar: React.FC<SidebarProps> = ({ tasks }) => {
     // Filter critical tasks (due within 3 days or overdue)
     const criticalTasks = tasks ? tasks.filter(t => {
         if (!t.deadline || t.is_completed) return false;
@@ -15,7 +20,12 @@ export const CriticalSidebar = ({ tasks }) => {
         const daysUntil = differenceInDays(deadline, new Date());
         // Simple check: overdue or within 7 days
         return daysUntil <= 7;
-    }).sort((a, b) => parseISO(a.deadline) - parseISO(b.deadline)) : [];
+    }).sort((a: Task, b: Task) => {
+        // Safe sort with fallback
+        const dateA = a.deadline ? parseISO(a.deadline).getTime() : 0;
+        const dateB = b.deadline ? parseISO(b.deadline).getTime() : 0;
+        return dateA - dateB;
+    }) : [];
 
     return (
         <aside className="w-72 flex-shrink-0 hidden xl:block">
@@ -32,13 +42,13 @@ export const CriticalSidebar = ({ tasks }) => {
 
                             return (
                                 <div key={i} className={`p-3 rounded-lg text-sm border transition-all hover:shadow-sm ${isOverdue ? 'bg-red-50 border-red-200' :
-                                        daysUntil <= 1 ? 'bg-orange-50 border-orange-200' :
-                                            'bg-white border-gray-200'
+                                    daysUntil <= 1 ? 'bg-orange-50 border-orange-200' :
+                                        'bg-white border-gray-200'
                                     }`}>
                                     <div className="font-medium text-gray-900 leading-tight mb-1">{task.title}</div>
                                     <div className={`text-xs flex items-center justify-between ${isOverdue ? 'text-red-600 font-semibold' :
-                                            daysUntil <= 1 ? 'text-orange-600' :
-                                                'text-gray-500'
+                                        daysUntil <= 1 ? 'text-orange-600' :
+                                            'text-gray-500'
                                         }`}>
                                         <span>
                                             {isOverdue ? 'Overdue' :
