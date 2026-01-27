@@ -67,6 +67,27 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# --- ROUTING WORKAROUND ---
+# Strips /aevum prefix and ensures requests match the root_path="/api" expectation
+# without requiring the user to change their global root_path configuration.
+class SubpathWorkaroundMiddleware:
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] == "http":
+            path = scope["path"]
+            if path.startswith("/aevum"):
+                # Case 1: /aevum/api/busy -> /api/busy
+                if path.startswith("/aevum/api"):
+                    scope["path"] = path.replace("/aevum/api", "/api", 1)
+                # Case 2: /aevum/busy -> /api/busy (Proxying directly)
+                else:
+                    scope["path"] = path.replace("/aevum", "/api", 1)
+        await self.app(scope, receive, send)
+
+app.add_middleware(SubpathWorkaroundMiddleware)
+
 app.add_middleware(
     SessionMiddleware, 
     secret_key=os.getenv("SESSION_SECRET", "super_secret_dev_key"),
