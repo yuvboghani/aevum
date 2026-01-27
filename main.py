@@ -9,9 +9,12 @@ Features:
 """
 import os
 import datetime
+import secrets
+import hmac
+import hashlib
 from typing import List, Optional
 from fastapi import FastAPI, Request, HTTPException, Depends, Query
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 from google_auth_oauthlib.flow import Flow
@@ -270,21 +273,45 @@ def health_check():
 
 @app.get("/login")
 def login(request: Request):
-    """Step 1: Redirect user to Google OAuth"""
+    """Step 1: Redirect user to Google OAuth (Stateless)"""
+    # Generate stateless signed state
+    nonce = secrets.token_hex(16)
+    secret = os.getenv("SESSION_SECRET", "super_secret_dev_key").encode()
+    signature = hmac.new(secret, nonce.encode(), hashlib.sha256).hexdigest()
+    signed_state = f"{nonce}.{signature}"
+
     flow = get_google_flow()
-    authorization_url, state = flow.authorization_url(
+    authorization_url, _ = flow.authorization_url(
         access_type='offline',
-        include_granted_scopes='true'
+        include_granted_scopes='true',
+        state=signed_state
     )
-    request.session['state'] = state
+    
+    print(f"DEBUG: Login initiated. Signed State: {signed_state}")
+    
     return RedirectResponse(authorization_url)
 
 
 @app.get("/callback")
 def callback(request: Request, code: str, state: str):
-    """Step 2: Handle OAuth callback"""
-    if state != request.session.get('state'):
-        raise HTTPException(status_code=400, detail="State mismatch")
+    """Step 2: Handle OAuth callback (Stateless Verification)"""
+    print(f"DEBUG: Callback received. State: {state}")
+
+    # Verify State Signature
+    try:
+        if not state or "." not in state:
+            raise ValueError("Invalid format")
+        
+        nonce, signature = state.split(".", 1)
+        secret = os.getenv("SESSION_SECRET", "super_secret_dev_key").encode()
+        expected = hmac.new(secret, nonce.encode(), hashlib.sha256).hexdigest()
+        
+        if not hmac.compare_digest(signature, expected):
+            raise ValueError("Signature mismatch")
+            
+    except ValueError as e:
+        print(f"ERROR: State verification failed: {e}")
+        raise HTTPException(status_code=400, detail="Invalid state parameter (Security Check Failed)")
 
     flow = get_google_flow()
     
@@ -294,6 +321,7 @@ def callback(request: Request, code: str, state: str):
         raise HTTPException(status_code=400, detail=f"Token exchange failed: {e}")
 
     credentials = flow.credentials
+    # Store credentials in session (now that we are back on the domain)
     request.session['credentials'] = {
         'token': credentials.token,
         'refresh_token': credentials.refresh_token,
@@ -303,7 +331,7 @@ def callback(request: Request, code: str, state: str):
         'scopes': credentials.scopes
     }
     
-    # Redirect to frontend using HTML to bypass browser redirect caches
+    # Redirect to frontend
     frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5173")
     print(f"DEBUG: Login successful. Redirecting to: {frontend_url}")
     
@@ -332,7 +360,6 @@ def callback(request: Request, code: str, state: str):
         </body>
     </html>
     """
-    from fastapi.responses import HTMLResponse
     return HTMLResponse(content=html_content, status_code=200)
 
 
