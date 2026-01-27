@@ -373,10 +373,12 @@ function Dashboard() {
   const [calendars, setCalendars] = useState([]);
   const [selectedCalendarIds, setSelectedCalendarIds] = useState([]);
 
-  // DnD Sensors
+  // --- DRAG AND DROP CONFIG ---
   const sensors = useSensors(
     useSensor(PointerSensor, {
-      activationConstraint: { distance: 8 },
+      activationConstraint: {
+        distance: 8, // Require 8px movement before drag starts
+      },
     })
   );
 
@@ -558,7 +560,7 @@ function Dashboard() {
   };
 
 
-  // Login redirect
+  // Login redirect - use detailed path if needed
   const handleLogin = () => window.location.href = `${API_URL}/login`;
 
   // Architect's Notes insights

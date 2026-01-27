@@ -71,8 +71,8 @@ app.add_middleware(
     SessionMiddleware, 
     secret_key=os.getenv("SESSION_SECRET", "super_secret_dev_key"),
     max_age=3600,  # 1 hour session
-    same_site="none",  # Allow cross-site redirects (Required for OAuth)
-    https_only=True    # Ensure secure cookies
+    https_only=os.getenv("VERCEL_ENV") == "production", # Secure cookies in prod
+    same_site="lax" # Standard for top-level navigation, works with our proxy
 )
 
 
