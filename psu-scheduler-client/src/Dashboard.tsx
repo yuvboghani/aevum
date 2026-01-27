@@ -349,7 +349,6 @@ function Dashboard() {
     const [activeEvent, setActiveEvent] = useState<CalendarEvent | null>(null);
     const [currentWeekStart] = useState(startOfWeek(new Date(), { weekStartsOn: 1 }));
     const [isLoading, setIsLoading] = useState(true);
-    const [notification, setNotification] = useState<{ message: string, type: string } | null>(null);
     const [viewMode, setViewMode] = useState('week');
     const [calendars, setCalendars] = useState<any[]>([]);
     const [selectedCalendarIds, setSelectedCalendarIds] = useState<string[]>([]);
@@ -552,15 +551,6 @@ function Dashboard() {
                     backgroundSize: '24px 24px',
                 }}
             />
-
-            {/* Notification Toast */}
-            {notification && (
-                <div className={`fixed top-20 right-4 z-50 px-4 py-3 rounded-lg shadow-lg animate-fade-in ${notification.type === 'error' ? 'bg-red-500 text-white' : 'bg-green-500 text-white'
-                    }`}>
-                    {notification.message}
-                </div>
-            )}
-
 
             {/* Main Content */}
             <div className="pt-20 px-4 lg:px-6 pb-8 relative z-10">
