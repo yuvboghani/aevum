@@ -353,6 +353,7 @@ function App() {
     return (
         <Routes>
             <Route path="/" element={<LandingPage />} />
+            <Route path="/home" element={<LandingPage />} />
             <Route path="/dashboard" element={<AppViews />} />
             <Route path="/canvas" element={<AppViews />} />
             {/* Handle auth callback */}
