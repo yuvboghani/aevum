@@ -45,7 +45,7 @@ app = FastAPI(
     title="Aevum Scheduler API",
     description="Smart schedule optimization with Google Calendar integration",
     version="2.1.0",
-    root_path="/aevum"
+    root_path="/api"
 )
 
 # CORS: Allow frontend to connect
