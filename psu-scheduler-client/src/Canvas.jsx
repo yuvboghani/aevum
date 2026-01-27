@@ -4,7 +4,8 @@ import axios from 'axios';
 import { format, parseISO, isToday, isTomorrow, differenceInDays, isPast } from 'date-fns';
 
 // --- CONFIG ---
-const API_URL = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? "/aevum" : "http://localhost:8000");
+// Strictly enforce relative path in PROD to use the proxy
+const API_URL = import.meta.env.PROD ? "/aevum" : (import.meta.env.VITE_API_URL || "http://localhost:8000");
 axios.defaults.withCredentials = true;
 
 // --- WORK TYPES ---

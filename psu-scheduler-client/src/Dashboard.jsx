@@ -13,7 +13,8 @@ import {
 import { CriticalSidebar } from './components/CriticalSidebar';
 
 // --- CONFIG ---
-const API_URL = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? "/aevum" : "http://localhost:8000");
+// Strictly enforce relative path in PROD to use the proxy
+const API_URL = import.meta.env.PROD ? "/aevum" : (import.meta.env.VITE_API_URL || "http://localhost:8000");
 axios.defaults.withCredentials = true;
 
 // --- TIME SLOTS CONFIG ---
@@ -382,9 +383,12 @@ function Dashboard() {
     })
   );
 
-  // Week days
+  // View days configuration
   const weekDays = useMemo(() => {
-    const days = viewMode === 'week' ? 7 : 3;
+    let days = 7;
+    if (viewMode === 'day') days = 1;
+    if (viewMode === 'month') days = 30; // Show approx one month
+
     return Array.from({ length: days }, (_, i) => addDays(currentWeekStart, i));
   }, [currentWeekStart, viewMode]);
 
@@ -642,9 +646,12 @@ function Dashboard() {
               onDragStart={handleDragStart}
               onDragEnd={handleDragEnd}
             >
-              <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+              <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-x-auto">
                 {/* Day Headers */}
-                <div className="grid border-b border-gray-100" style={{ gridTemplateColumns: `60px repeat(${weekDays.length}, 1fr)` }}>
+                <div
+                  className="grid border-b border-gray-100 min-w-max"
+                  style={{ gridTemplateColumns: `60px repeat(${weekDays.length}, minmax(140px, 1fr))` }}
+                >
                   <div className="p-3" />
                   {weekDays.map((day, i) => {
                     const isToday = isSameDay(day, new Date());
@@ -667,9 +674,9 @@ function Dashboard() {
                   {HOURS.map((hour) => (
                     <div
                       key={hour}
-                      className="grid border-b border-gray-100"
+                      className="grid border-b border-gray-100 min-w-max"
                       style={{
-                        gridTemplateColumns: `60px repeat(${weekDays.length}, 1fr)`,
+                        gridTemplateColumns: `60px repeat(${weekDays.length}, minmax(140px, 1fr))`,
                         height: '60px' // Fixed height per hour
                       }}
                     >
@@ -699,7 +706,7 @@ function Dashboard() {
                   >
                     <div
                       className="grid h-full"
-                      style={{ gridTemplateColumns: `repeat(${weekDays.length}, 1fr)` }}
+                      style={{ gridTemplateColumns: `repeat(${weekDays.length}, minmax(140px, 1fr))` }}
                     >
                       {weekDays.map((day, dayIndex) => {
                         // Get all events for this day
