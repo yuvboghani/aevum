@@ -5,7 +5,7 @@ import { format, parseISO, isToday, isTomorrow, differenceInDays, isPast } from 
 import { Task, WorkType } from './types';
 
 // --- CONFIG ---
-const API_URL = import.meta.env.PROD ? "/aevum/api" : (import.meta.env.VITE_API_URL || "http://localhost:8000");
+const API_URL = import.meta.env.PROD ? "/aevum" : (import.meta.env.VITE_API_URL || "http://localhost:8000");
 axios.defaults.withCredentials = true;
 
 // --- SVG ICONS ---

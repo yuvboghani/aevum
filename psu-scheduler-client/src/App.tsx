@@ -119,7 +119,7 @@ function AIAssistantBar({ onAddTask: _onAddTask, onOptimize: _onOptimize, onMove
     ]);
 
     // Strictly enforce relative path in PROD to use the proxy, ignoring any auto-set env vars
-    const API_URL = import.meta.env.PROD ? "/aevum/api" : (import.meta.env.VITE_API_URL || "http://localhost:8000");
+    const API_URL = import.meta.env.PROD ? "/aevum" : (import.meta.env.VITE_API_URL || "http://localhost:8000");
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -285,7 +285,7 @@ function AppViews() {
     const [refreshKey, setRefreshKey] = useState(0);
 
     // Strictly enforce relative path in PROD to use the proxy, ignoring any auto-set env vars
-    const API_URL = import.meta.env.PROD ? "/aevum/api" : (import.meta.env.VITE_API_URL || "http://localhost:8000");
+    const API_URL = import.meta.env.PROD ? "/aevum" : (import.meta.env.VITE_API_URL || "http://localhost:8000");
     axios.defaults.withCredentials = true;
 
     // Sync URL with active view
