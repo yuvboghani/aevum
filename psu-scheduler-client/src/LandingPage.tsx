@@ -2,7 +2,7 @@
 
 // --- CONFIG ---
 // Strictly enforce relative path in PROD to use the proxy
-const API_URL = import.meta.env.PROD ? "/aevum" : (import.meta.env.VITE_API_URL || "http://localhost:8000");
+const API_URL = import.meta.env.PROD ? "/aevum/api" : (import.meta.env.VITE_API_URL || "http://localhost:8000");
 
 
 

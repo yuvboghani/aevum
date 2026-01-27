@@ -20,9 +20,10 @@ ZAI_API_KEY = os.getenv("ZAI_API_KEY", "cd596480363b4730bc4ba65c7585c3bd.iRCenjx
 ZAI_BASE_URL = os.getenv("ZAI_BASE_URL", "https://api.z.ai/api/paas/v4/")
 
 # Model tiers
-MODEL_FLASH = "glm-4-flash"      # Free tier, daily driver
+# Model tiers
+MODEL_FLASH = "glm-4.5-air"      # Free/Cheap tier (Flash unavailable, using Air)
 MODEL_AIR = "glm-4.5-air"        # 66% cheaper, good reasoning
-MODEL_FLAGSHIP = "glm-4.7"       # Flagship, use sparingly
+MODEL_FLAGSHIP = "glm-4.5"       # Standard high quality
 
 DEFAULT_MODEL = os.getenv("ZAI_DEFAULT_MODEL", MODEL_FLASH)
 
@@ -286,6 +287,25 @@ Respond with structured JSON only."""
         """
         # Use sync version wrapped (OpenAI SDK handles this)
         return self.generate_structured_sync(request, model_override)
+
+    async def chat(
+        self,
+        messages: List[dict],
+        model_override: Optional[str] = None
+    ) -> Any:
+        """
+        Generic chat completion with automatic model selection.
+        """
+        # Extract last message to detect complexity
+        last_msg = messages[-1]["content"] if messages else ""
+        complexity = detect_complexity(last_msg)
+        model = model_override or get_model_for_complexity(complexity)
+        
+        return self.client.chat.completions.create(
+            model=model,
+            messages=messages,
+            temperature=0.7
+        )
 
 
 # Singleton client instance

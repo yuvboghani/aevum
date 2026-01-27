@@ -1,23 +1,12 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import axios from 'axios';
 import { format, parseISO, addDays, startOfWeek, setHours, setMinutes, differenceInMinutes, isSameDay } from 'date-fns';
-import {
-    DndContext,
-    DragOverlay,
-    useDraggable,
-    useDroppable,
-    PointerSensor,
-    useSensor,
-    useSensors,
-    DragEndEvent,
-    DragStartEvent,
-} from '@dnd-kit/core';
 import { CriticalSidebar } from './components/CriticalSidebar';
 import { Task, CalendarEvent } from './types';
 
 // --- CONFIG ---
 // Strictly enforce relative path in PROD to use the proxy
-const API_URL = import.meta.env.PROD ? "/aevum" : (import.meta.env.VITE_API_URL || "http://localhost:8000");
+const API_URL = import.meta.env.PROD ? "/aevum/api" : (import.meta.env.VITE_API_URL || "http://localhost:8000");
 axios.defaults.withCredentials = true;
 
 // --- TIME SLOTS CONFIG ---
@@ -198,54 +187,115 @@ const EventCard: React.FC<EventCardProps> = ({ event, isDragging, style }) => {
     );
 };
 
-// --- DROPPABLE TIME SLOT ---
-interface DroppableSlotProps {
-    id: string;
-    children: React.ReactNode;
-    hour: number;
-    dayDate: Date;
-}
-
-const DroppableSlot: React.FC<DroppableSlotProps> = ({ id, children, hour, dayDate }) => {
-    const { setNodeRef, isOver } = useDroppable({
-        id,
-        data: { hour, dayDate },
-    });
-
-    return (
-        <div
-            ref={setNodeRef}
-            className={`h-full transition-colors ${isOver ? 'bg-orange-50' : ''}`}
-        >
-            {children}
-        </div>
-    );
-};
-
-// --- DRAGGABLE EVENT ---
+// --- MANUAL DRAGGABLE EVENT ---
 interface DraggableEventProps {
     event: CalendarEvent;
     style?: React.CSSProperties;
+    containerRef: React.RefObject<HTMLDivElement | null>;
+    onMove: (id: string, newStart: Date) => void;
+    weekDays: Date[];
 }
 
-const DraggableEvent: React.FC<DraggableEventProps> = ({ event, style: positionStyle }) => {
-    const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
-        id: event.id,
-        data: event,
-    });
+const DraggableEvent: React.FC<DraggableEventProps> = ({ event, style: positionStyle, containerRef, onMove, weekDays }) => {
+    const [isDragging, setIsDragging] = useState(false);
+    const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+    const cardRef = useRef<HTMLDivElement>(null);
 
-    // Merge position style with drag transform
-    const combinedStyle: React.CSSProperties = {
-        ...positionStyle,
-        ...(transform ? {
-            transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
-            zIndex: 1000,
-        } : {}),
+    const handleMouseDown = (e: React.MouseEvent) => {
+        // Only allow left click
+        if (e.button !== 0) return;
+
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragging(true);
+
+        const cardRect = cardRef.current?.getBoundingClientRect();
+        if (cardRect) {
+            setDragOffset({
+                x: e.clientX - cardRect.left,
+                y: e.clientY - cardRect.top
+            });
+        }
     };
 
+    useEffect(() => {
+        if (!isDragging) return;
+
+        const handleMouseMove = (e: MouseEvent) => {
+            const gridContainer = containerRef.current;
+            const cardElement = cardRef.current;
+            if (!gridContainer || !cardElement) return;
+
+            const gridRect = gridContainer.getBoundingClientRect();
+
+            // Raw visual movement (feedback)
+            let newX = e.clientX - gridRect.left - dragOffset.x - 60; // 60 is time column offset
+            let newY = e.clientY - gridRect.top - dragOffset.y;
+
+            // Update visual position directly for smooth feedback
+            cardElement.style.left = `${newX}px`;
+            cardElement.style.top = `${newY}px`;
+            cardElement.style.zIndex = "1000";
+            cardElement.style.width = `${gridRect.width / weekDays.length - 10}px`; // Maintain column width
+        };
+
+        const handleMouseUp = (e: MouseEvent) => {
+            const gridContainer = containerRef.current;
+            if (!gridContainer) {
+                setIsDragging(false);
+                return;
+            }
+
+            const gridRect = gridContainer.getBoundingClientRect();
+            const relativeX = e.clientX - gridRect.left - dragOffset.x - 60;
+            const relativeY = e.clientY - gridRect.top - dragOffset.y;
+
+            // Calculate Day
+            const dayWidth = (gridRect.width - 60) / weekDays.length;
+            const dayIndex = Math.max(0, Math.min(weekDays.length - 1, Math.floor((relativeX + dayWidth / 2) / dayWidth)));
+            const targetDay = weekDays[dayIndex];
+
+            // Calculate Time (snap to 15 mins)
+            const minutesFromStart = Math.max(0, relativeY);
+            const snappedMinutes = Math.round(minutesFromStart / 15) * 15;
+            const hours = Math.floor(snappedMinutes / 60) + START_HOUR;
+            const mins = snappedMinutes % 60;
+
+            const newStartDate = new Date(targetDay);
+            newStartDate.setHours(hours, mins, 0, 0);
+
+            // Clean up visual overrides before calling state update
+            if (cardRef.current) {
+                cardRef.current.style.left = "";
+                cardRef.current.style.top = "";
+                cardRef.current.style.zIndex = "";
+                cardRef.current.style.width = "";
+            }
+
+            setIsDragging(false);
+            onMove(event.id, newStartDate);
+        };
+
+        document.addEventListener('mousemove', handleMouseMove);
+        document.addEventListener('mouseup', handleMouseUp);
+
+        return () => {
+            document.removeEventListener('mousemove', handleMouseMove);
+            document.removeEventListener('mouseup', handleMouseUp);
+        };
+    }, [isDragging, dragOffset, containerRef, event.id, weekDays, onMove]);
+
     return (
-        <div ref={setNodeRef} {...listeners} {...attributes}>
-            <EventCard event={event} isDragging={isDragging} style={combinedStyle} />
+        <div
+            ref={cardRef}
+            onMouseDown={handleMouseDown}
+            className={`absolute z-10 transition-opacity ${isDragging ? 'opacity-50 pointer-events-none' : ''}`}
+            style={{
+                ...positionStyle,
+                width: 'calc(100% - 8px)',
+            }}
+        >
+            <EventCard event={event} isDragging={isDragging} />
         </div>
     );
 };
@@ -267,7 +317,15 @@ const LeftSidebar: React.FC<LeftSidebarProps> = ({ calendars, selectedCalendarId
             {tasks && tasks.length > 0 ? (
                 <div className="space-y-2 max-h-[180px] overflow-y-auto">
                     {tasks.slice(0, 5).map((task, i) => (
-                        <div key={i} className="flex items-center gap-2 text-sm p-1.5 hover:bg-gray-50 rounded">
+                        <div
+                            key={i}
+                            className="flex items-center gap-2 text-sm p-1.5 hover:bg-gray-50 rounded cursor-grab active:cursor-grabbing"
+                            draggable
+                            onDragStart={(e) => {
+                                e.dataTransfer.setData('task', JSON.stringify(task));
+                                e.dataTransfer.effectAllowed = 'copy';
+                            }}
+                        >
                             <div className="w-2 h-2 rounded-full bg-orange-400 flex-shrink-0" />
                             <span className="truncate text-gray-700">{task.title}</span>
                         </div>
@@ -346,21 +404,15 @@ const LeftSidebar: React.FC<LeftSidebarProps> = ({ calendars, selectedCalendarId
 function Dashboard() {
     const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([]);
     const [dbTasks, setDbTasks] = useState<Task[]>([]);
-    const [activeEvent, setActiveEvent] = useState<CalendarEvent | null>(null);
     const [currentWeekStart] = useState(startOfWeek(new Date(), { weekStartsOn: 1 }));
     const [isLoading, setIsLoading] = useState(true);
     const [viewMode, setViewMode] = useState('week');
     const [calendars, setCalendars] = useState<any[]>([]);
     const [selectedCalendarIds, setSelectedCalendarIds] = useState<string[]>([]);
+    const gridRef = useRef<HTMLDivElement>(null);
 
-    // --- DRAG AND DROP CONFIG ---
-    const sensors = useSensors(
-        useSensor(PointerSensor, {
-            activationConstraint: {
-                distance: 8, // Require 8px movement before drag starts
-            },
-        })
-    );
+    // Filter tasks that aren't on calendar yet (for sidebar)
+    const pendingTasks = dbTasks.filter(t => !t.is_completed);
 
     // View days configuration
     const weekDays = useMemo(() => {
@@ -516,19 +568,70 @@ function Dashboard() {
     }, [fetchCalendarEvents, fetchTasks, fetchCalendars]);
 
 
-    // Handle drag start/end
-    const handleDragStart = (event: DragStartEvent) => {
-        const draggedEvent = calendarEvents.find(e => e.id === event.active.id);
-        if (draggedEvent) {
-            setActiveEvent(draggedEvent);
-        }
+    // Handle moving an event
+    const handleMoveEvent = (eventId: string, newStart: Date) => {
+        setCalendarEvents(prev => prev.map(e => {
+            if (e.id === eventId) {
+                const duration = e.durationMinutes || 60;
+                const newEnd = new Date(newStart.getTime() + duration * 60000);
+                return {
+                    ...e,
+                    start: newStart.toISOString(),
+                    end: newEnd.toISOString(),
+                    time: `${format(newStart, 'h:mm a')} - ${format(newEnd, 'h:mm a')}`,
+                };
+            }
+            return e;
+        }));
     };
 
-    const handleDragEnd = (event: DragEndEvent) => {
-        const { over } = event;
-        setActiveEvent(null);
-        if (!over) return;
-        // Drag and drop logic here
+    // Handle dropping a task from sidebar
+    const handleDropTask = async (e: React.DragEvent) => {
+        e.preventDefault();
+        const taskData = e.dataTransfer.getData('task');
+        if (!taskData || !gridRef.current) return;
+
+        const task = JSON.parse(taskData);
+        const gridRect = gridRef.current.getBoundingClientRect();
+
+        const relativeX = e.clientX - gridRect.left - 60;
+        const relativeY = e.clientY - gridRect.top;
+
+        // Calculate Day
+        const dayWidth = (gridRect.width - 60) / weekDays.length;
+        const dayIndex = Math.max(0, Math.min(weekDays.length - 1, Math.floor(relativeX / dayWidth)));
+        const targetDay = weekDays[dayIndex];
+
+        // Calculate Time
+        const snappedMinutes = Math.round(Math.max(0, relativeY) / 15) * 15;
+        const hours = Math.floor(snappedMinutes / 60) + START_HOUR;
+        const mins = snappedMinutes % 60;
+
+        const newStartDate = new Date(targetDay);
+        newStartDate.setHours(hours, mins, 0, 0);
+        const newEndDate = new Date(newStartDate.getTime() + (task.estimated_minutes || 60) * 60000);
+
+        const newEvent: CalendarEvent = {
+            id: `task-event-${task.id}`,
+            title: task.title,
+            start: newStartDate.toISOString(),
+            end: newEndDate.toISOString(),
+            time: `${format(newStartDate, 'h:mm a')} - ${format(newEndDate, 'h:mm a')}`,
+            eventType: EVENT_TYPES.AI_SUGGESTION,
+            durationMinutes: task.estimated_minutes || 60,
+            badge: 'NEW',
+        };
+
+        setCalendarEvents(prev => [...prev, newEvent]);
+
+        // Optionally update backend
+        try {
+            await axios.put(`${API_URL}/tasks/${task.id}`, {
+                deadline: newStartDate.toISOString()
+            });
+        } catch (err) {
+            console.error("Failed to update task deadline:", err);
+        }
     };
 
 
@@ -561,7 +664,7 @@ function Dashboard() {
                         selectedCalendarIds={selectedCalendarIds}
                         onToggleCalendar={toggleCalendar}
                         onLogin={handleLogin}
-                        tasks={dbTasks}
+                        tasks={pendingTasks}
                     />
 
                     {/* Calendar Section */}
@@ -575,122 +678,105 @@ function Dashboard() {
                         />
 
                         {/* Calendar Grid */}
-                        <DndContext
-                            sensors={sensors}
-                            onDragStart={handleDragStart}
-                            onDragEnd={handleDragEnd}
+                        <div
+                            className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-x-auto relative"
+                            ref={gridRef}
+                            onDragOver={(e) => e.preventDefault()}
+                            onDrop={handleDropTask}
                         >
-                            <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-x-auto">
-                                {/* Day Headers */}
-                                <div
-                                    className="grid border-b border-gray-100 min-w-max"
-                                    style={{ gridTemplateColumns: `60px repeat(${weekDays.length}, minmax(140px, 1fr))` }}
-                                >
-                                    <div className="p-3" />
-                                    {weekDays.map((day, i) => {
-                                        const isToday = isSameDay(day, new Date());
-                                        return (
-                                            <div key={i} className={`p-3 text-center border-l border-gray-100 ${isToday ? 'bg-orange-50' : ''}`}>
-                                                <div className="text-xs font-semibold text-gray-400 uppercase">
-                                                    {format(day, 'EEE')}
-                                                </div>
-                                                <div className={`text-lg font-semibold mt-0.5 ${isToday ? 'text-orange-600' : 'text-gray-900'}`}>
-                                                    {format(day, 'd')}
-                                                </div>
+                            {/* Day Headers */}
+                            <div
+                                className="grid border-b border-gray-100 min-w-max"
+                                style={{ gridTemplateColumns: `60px repeat(${weekDays.length}, minmax(140px, 1fr))` }}
+                            >
+                                <div className="p-3" />
+                                {weekDays.map((day, i) => {
+                                    const isToday = isSameDay(day, new Date());
+                                    return (
+                                        <div key={i} className={`p-3 text-center border-l border-gray-100 ${isToday ? 'bg-orange-50' : ''}`}>
+                                            <div className="text-xs font-semibold text-gray-400 uppercase">
+                                                {format(day, 'EEE')}
                                             </div>
-                                        );
-                                    })}
-                                </div>
-
-                                {/* Time Grid Container */}
-                                <div className="relative">
-                                    {/* Time rows - static height */}
-                                    {HOURS.map((hour) => (
-                                        <div
-                                            key={hour}
-                                            className="grid border-b border-gray-100 min-w-max"
-                                            style={{
-                                                gridTemplateColumns: `60px repeat(${weekDays.length}, minmax(140px, 1fr))`,
-                                                height: '60px' // Fixed height per hour
-                                            }}
-                                        >
-                                            {/* Time Label */}
-                                            <div className="text-xs font-medium text-gray-400 text-right pr-3 pt-1">
-                                                {hour % 12 || 12} {hour >= 12 ? 'PM' : 'AM'}
+                                            <div className={`text-lg font-semibold mt-0.5 ${isToday ? 'text-orange-600' : 'text-gray-900'}`}>
+                                                {format(day, 'd')}
                                             </div>
-
-                                            {/* Empty day cells - just for the grid lines */}
-                                            {weekDays.map((day, dayIndex) => (
-                                                <DroppableSlot
-                                                    key={dayIndex}
-                                                    id={`${format(day, 'yyyy-MM-dd')}-${hour}`}
-                                                    hour={hour}
-                                                    dayDate={day}
-                                                >
-                                                    <div className="border-l border-gray-100 h-full" />
-                                                </DroppableSlot>
-                                            ))}
                                         </div>
-                                    ))}
+                                    );
+                                })}
+                            </div>
 
-                                    {/* Events Layer - positioned absolutely on top of the grid */}
+                            {/* Time Grid Container */}
+                            <div className="relative">
+                                {/* Time rows - static height */}
+                                {HOURS.map((hour) => (
                                     <div
-                                        className="absolute top-0 left-0 right-0 bottom-0 pointer-events-none"
-                                        style={{ marginLeft: '60px' }} // Offset for time column
+                                        key={hour}
+                                        className="grid border-b border-gray-100 min-w-max"
+                                        style={{
+                                            gridTemplateColumns: `60px repeat(${weekDays.length}, minmax(140px, 1fr))`,
+                                            height: '60px' // Fixed height per hour
+                                        }}
                                     >
-                                        <div
-                                            className="grid h-full"
-                                            style={{ gridTemplateColumns: `repeat(${weekDays.length}, minmax(140px, 1fr))` }}
-                                        >
-                                            {weekDays.map((day, dayIndex) => {
-                                                // Get all events for this day
-                                                const dayEvents = calendarEvents.filter(event => {
-                                                    const eventStart = parseISO(event.start);
-                                                    return isSameDay(eventStart, day);
-                                                });
-
-                                                return (
-                                                    <div key={dayIndex} className="relative pointer-events-auto">
-                                                        {dayEvents.map((event) => {
-                                                            const eventStart = parseISO(event.start);
-                                                            const startHour = eventStart.getHours();
-                                                            const startMinutes = eventStart.getMinutes();
-                                                            const duration = event.durationMinutes || 60;
-
-                                                            // Calculate position relative to START_HOUR
-                                                            const hoursFromStart = startHour - START_HOUR;
-                                                            const topOffset = (hoursFromStart * 60 + startMinutes); // in pixels (1px per minute)
-                                                            const height = duration; // height in pixels (1px per minute)
-
-                                                            // Skip if event is outside visible hours
-                                                            if (startHour < START_HOUR || startHour >= END_HOUR) return null;
-
-                                                            return (
-                                                                <DraggableEvent
-                                                                    key={event.id}
-                                                                    event={event}
-                                                                    style={{
-                                                                        top: `${topOffset}px`,
-                                                                        height: `${Math.max(height, 30)}px`, // Min 30px height
-                                                                    }}
-                                                                />
-                                                            );
-                                                        })}
-                                                    </div>
-                                                );
-                                            })}
+                                        {/* Time Label */}
+                                        <div className="text-xs font-medium text-gray-400 text-right pr-3 pt-1">
+                                            {hour % 12 || 12} {hour >= 12 ? 'PM' : 'AM'}
                                         </div>
+
+                                        {/* Empty day cells - just for the grid lines */}
+                                        {weekDays.map((_, dayIndex) => (
+                                            <div key={dayIndex} className="border-l border-gray-100 h-full" />
+                                        ))}
+                                    </div>
+                                ))}
+
+                                {/* Events Layer - positioned absolutely on top of the grid */}
+                                <div
+                                    className="absolute top-0 left-0 right-0 bottom-0 pointer-events-none"
+                                    style={{ marginLeft: '60px' }} // Offset for time column
+                                >
+                                    <div className="relative h-full pointer-events-none">
+                                        {calendarEvents.map((event) => {
+                                            const eventStart = parseISO(event.start);
+                                            const startHour = eventStart.getHours();
+                                            const startMinutes = eventStart.getMinutes();
+                                            const duration = event.durationMinutes || 60;
+
+                                            // Calculate Day Index
+                                            const dayIndex = weekDays.findIndex(d => isSameDay(d, eventStart));
+                                            if (dayIndex === -1) return null;
+
+                                            const dayWidth = 100 / weekDays.length;
+                                            const leftPercent = dayIndex * dayWidth;
+
+                                            // Calculate position relative to START_HOUR
+                                            const hoursFromStart = startHour - START_HOUR;
+                                            const topOffset = (hoursFromStart * 60 + startMinutes);
+                                            const height = duration;
+
+                                            if (startHour < START_HOUR || startHour >= END_HOUR) return null;
+
+                                            return (
+                                                <DraggableEvent
+                                                    key={event.id}
+                                                    event={event}
+                                                    containerRef={gridRef}
+                                                    onMove={handleMoveEvent}
+                                                    weekDays={weekDays}
+                                                    style={{
+                                                        left: `${leftPercent}%`,
+                                                        width: `${dayWidth}%`,
+                                                        top: `${topOffset}px`,
+                                                        height: `${Math.max(height, 30)}px`,
+                                                        padding: '0 4px',
+                                                        pointerEvents: 'auto',
+                                                    }}
+                                                />
+                                            );
+                                        })}
                                     </div>
                                 </div>
                             </div>
-
-                            {/* Drag Overlay */}
-                            <DragOverlay>
-                                {activeEvent ? (
-                                    <EventCard event={activeEvent} isDragging={true} />
-                                ) : null}
-                            </DragOverlay>
-                        </DndContext>
+                        </div>
                     </main>
 
                     {/* Right Sidebar (Critical Tasks) */}

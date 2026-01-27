@@ -31,7 +31,7 @@ from models import Task as TaskModel, WorkType as ModelWorkType, Base
 from heuristic_engine import HeuristicScheduler, Task as EngineTask, WorkType as EngineWorkType
 
 # LLM Integration (Z.ai via OpenAI-compatible SDK)
-from openai import OpenAI
+from llm_client import get_zai_client, AIAssistantRequest, LLMScheduleResponse, TaskSuggestion, TaskAction
 
 # --- CONFIGURATION ---
 os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'  # Allow HTTP for local dev
@@ -915,18 +915,8 @@ async def apply_ai_suggestions(
 # AEVUM PROJECT ARCHITECT - LLM INTEGRATION
 # =============================================================================
 
-# --- Z.ai LLM Configuration ---
-ZAI_API_KEY = os.getenv("ZAI_API_KEY", "")
-ZAI_BASE_URL = os.getenv("ZAI_BASE_URL", "https://api.z.ai/api/paas/v4/")
-ZAI_MODEL = os.getenv("ZAI_DEFAULT_MODEL", "glm-4.5-air")
-
-# Initialize OpenAI-compatible client for Z.ai
-llm_client = None
-if ZAI_API_KEY:
-    llm_client = OpenAI(
-        api_key=ZAI_API_KEY,
-        base_url=ZAI_BASE_URL
-    )
+# The architect logic now uses the unified ZaiClient from llm_client.py
+# ensuring automatic complexity detection and model selection for token optimization.
 
 # --- Aevum Project Architect System Prompt ---
 ARCHITECT_SYSTEM_PROMPT = """You are the "Aevum Project Architect." Your goal is to analyze high-level objectives and decompose them into actionable, scheduled plans.
@@ -1015,16 +1005,15 @@ async def architect_chat(
     for msg in request.messages:
         messages.append({"role": msg.role, "content": msg.content})
     
+    # Use the consolidated ZaiClient with complexity-based model selection
+    client = get_zai_client()
+    
     try:
-        # Call Z.ai LLM
-        completion = llm_client.chat.completions.create(
-            model=ZAI_MODEL,
-            messages=messages,
-            temperature=0.7,
-            max_tokens=2000
-        )
+        # Call Z.ai LLM via the optimized chat method
+        completion = await client.chat(messages=messages)
         
         response_content = completion.choices[0].message.content
+        model_used = completion.model
         
         # Try to extract tasks if response contains JSON
         tasks_suggested = None
@@ -1049,7 +1038,7 @@ async def architect_chat(
         return ArchitectResponse(
             message=response_content,
             tasks_suggested=tasks_suggested,
-            model_used=ZAI_MODEL
+            model_used=model_used
         )
         
     except Exception as e:
@@ -1061,33 +1050,20 @@ async def architect_chat(
 
 @app.get("/architect/test", tags=["AI Architect"])
 async def test_architect_connection():
-    """
-    Test the connection to the Z.ai LLM service.
-    Returns the model info and a simple test response.
-    """
-    if not llm_client:
-        return {
-            "status": "not_configured",
-            "message": "ZAI_API_KEY not set",
-            "base_url": ZAI_BASE_URL,
-            "model": ZAI_MODEL
-        }
+    client = get_zai_client()
     
     try:
         # Simple test message
-        completion = llm_client.chat.completions.create(
-            model=ZAI_MODEL,
+        completion = await client.chat(
             messages=[
                 {"role": "system", "content": "You are a helpful assistant. Respond briefly."},
                 {"role": "user", "content": "Say 'Aevum Architect ready!' and nothing else."}
-            ],
-            max_tokens=50
+            ]
         )
         
         return {
             "status": "connected",
-            "model": ZAI_MODEL,
-            "base_url": ZAI_BASE_URL,
+            "model": completion.model,
             "test_response": completion.choices[0].message.content,
             "usage": {
                 "prompt_tokens": completion.usage.prompt_tokens,
@@ -1098,8 +1074,7 @@ async def test_architect_connection():
     except Exception as e:
         return {
             "status": "error",
-            "model": ZAI_MODEL,
-            "base_url": ZAI_BASE_URL,
+            "message": "AI service communication failed",
             "error": str(e)
         }
 
