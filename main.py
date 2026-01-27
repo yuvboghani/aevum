@@ -31,14 +31,19 @@ from models import Task as TaskModel, WorkType as ModelWorkType, Base
 from heuristic_engine import HeuristicScheduler, Task as EngineTask, WorkType as EngineWorkType
 
 # LLM Integration (Z.ai via OpenAI-compatible SDK)
-from llm_client import get_zai_client, AIAssistantRequest, LLMScheduleResponse, TaskSuggestion, TaskAction
+from llm_client import get_zai_client, get_ollama_client, AIAssistantRequest, LLMScheduleResponse, TaskSuggestion, TaskAction
 
 # --- CONFIGURATION ---
 os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'  # Allow HTTP for local dev
 
 CLIENT_SECRETS_FILE = "client_secrets.json"
 SCOPES = ["https://www.googleapis.com/auth/calendar.readonly"]
-REDIRECT_URI = os.getenv("OAUTH_REDIRECT_URI", "http://localhost:8000/callback")
+REDIRECT_URI = os.getenv("OAUTH_REDIRECT_URI")
+if not REDIRECT_URI:
+    if os.getenv("VERCEL_ENV") == "production":
+        REDIRECT_URI = "https://yuvboghani.com/aevum/callback"
+    else:
+        REDIRECT_URI = "http://localhost:8000/callback"
 
 # --- APP SETUP ---
 app = FastAPI(
@@ -353,7 +358,13 @@ def callback(request: Request, code: str, state: str):
     }
     
     # Redirect to frontend
-    frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5173")
+    frontend_url = os.getenv("FRONTEND_URL")
+    if not frontend_url:
+        if os.getenv("VERCEL_ENV") == "production":
+            frontend_url = "https://yuvboghani.com/aevum"
+        else:
+            frontend_url = "http://localhost:5173"
+            
     print(f"DEBUG: Login successful. Redirecting to: {frontend_url}")
     
     html_content = f"""

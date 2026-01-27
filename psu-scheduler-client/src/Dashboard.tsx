@@ -139,7 +139,7 @@ const EventCard: React.FC<EventCardProps> = ({ event, isDragging, style }) => {
     return (
         <div
             className={`
-        absolute left-1 right-1 p-2 cursor-grab select-none overflow-hidden
+        absolute inset-0 p-2 cursor-grab select-none overflow-hidden
         ${safeStyles.bg} ${safeStyles.border} ${safeStyles.text}
         ${isRounded ? 'rounded-2xl' : 'rounded-lg'}
         ${isDragging ? 'opacity-50 shadow-lg z-50' : 'shadow-sm'}
@@ -198,64 +198,69 @@ interface DraggableEventProps {
 
 const DraggableEvent: React.FC<DraggableEventProps> = ({ event, style: positionStyle, containerRef, onMove, weekDays }) => {
     const [isDragging, setIsDragging] = useState(false);
+    const [dragPosition, setDragPosition] = useState<{ x: number; y: number } | null>(null);
     const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+    const [originalRect, setOriginalRect] = useState<{ width: number; height: number } | null>(null);
     const cardRef = useRef<HTMLDivElement>(null);
 
     const handleMouseDown = (e: React.MouseEvent) => {
-        // Only allow left click
         if (e.button !== 0) return;
 
         e.preventDefault();
         e.stopPropagation();
-        setIsDragging(true);
 
         const cardRect = cardRef.current?.getBoundingClientRect();
-        if (cardRect) {
-            setDragOffset({
-                x: e.clientX - cardRect.left,
-                y: e.clientY - cardRect.top
-            });
-        }
+        const gridRect = containerRef.current?.getBoundingClientRect();
+        if (!cardRect || !gridRect) return;
+
+        // Store original dimensions
+        setOriginalRect({ width: cardRect.width, height: cardRect.height });
+
+        // Calculate offset from click point to card top-left
+        setDragOffset({
+            x: e.clientX - cardRect.left,
+            y: e.clientY - cardRect.top
+        });
+
+        // Set initial drag position (relative to grid container)
+        setDragPosition({
+            x: cardRect.left - gridRect.left - 60, // 60 is time column
+            y: cardRect.top - gridRect.top
+        });
+
+        setIsDragging(true);
     };
 
     useEffect(() => {
         if (!isDragging) return;
 
         const handleMouseMove = (e: MouseEvent) => {
-            const gridContainer = containerRef.current;
-            const cardElement = cardRef.current;
-            if (!gridContainer || !cardElement) return;
+            const gridRect = containerRef.current?.getBoundingClientRect();
+            if (!gridRect) return;
 
-            const gridRect = gridContainer.getBoundingClientRect();
+            const newX = e.clientX - gridRect.left - dragOffset.x - 60;
+            const newY = e.clientY - gridRect.top - dragOffset.y;
 
-            // Raw visual movement (feedback)
-            let newX = e.clientX - gridRect.left - dragOffset.x - 60; // 60 is time column offset
-            let newY = e.clientY - gridRect.top - dragOffset.y;
-
-            // Update visual position directly for smooth feedback
-            cardElement.style.left = `${newX}px`;
-            cardElement.style.top = `${newY}px`;
-            cardElement.style.zIndex = "1000";
-            cardElement.style.width = `${gridRect.width / weekDays.length - 10}px`; // Maintain column width
+            setDragPosition({ x: newX, y: newY });
         };
 
         const handleMouseUp = (e: MouseEvent) => {
-            const gridContainer = containerRef.current;
-            if (!gridContainer) {
+            const gridRect = containerRef.current?.getBoundingClientRect();
+            if (!gridRect) {
                 setIsDragging(false);
+                setDragPosition(null);
                 return;
             }
 
-            const gridRect = gridContainer.getBoundingClientRect();
             const relativeX = e.clientX - gridRect.left - dragOffset.x - 60;
             const relativeY = e.clientY - gridRect.top - dragOffset.y;
 
-            // Calculate Day
+            // Calculate target day
             const dayWidth = (gridRect.width - 60) / weekDays.length;
             const dayIndex = Math.max(0, Math.min(weekDays.length - 1, Math.floor((relativeX + dayWidth / 2) / dayWidth)));
             const targetDay = weekDays[dayIndex];
 
-            // Calculate Time (snap to 15 mins)
+            // Calculate target time (snap to 15 min)
             const minutesFromStart = Math.max(0, relativeY);
             const snappedMinutes = Math.round(minutesFromStart / 15) * 15;
             const hours = Math.floor(snappedMinutes / 60) + START_HOUR;
@@ -264,15 +269,8 @@ const DraggableEvent: React.FC<DraggableEventProps> = ({ event, style: positionS
             const newStartDate = new Date(targetDay);
             newStartDate.setHours(hours, mins, 0, 0);
 
-            // Clean up visual overrides before calling state update
-            if (cardRef.current) {
-                cardRef.current.style.left = "";
-                cardRef.current.style.top = "";
-                cardRef.current.style.zIndex = "";
-                cardRef.current.style.width = "";
-            }
-
             setIsDragging(false);
+            setDragPosition(null);
             onMove(event.id, newStartDate);
         };
 
@@ -286,17 +284,32 @@ const DraggableEvent: React.FC<DraggableEventProps> = ({ event, style: positionS
     }, [isDragging, dragOffset, containerRef, event.id, weekDays, onMove]);
 
     return (
-        <div
-            ref={cardRef}
-            onMouseDown={handleMouseDown}
-            className={`absolute z-10 transition-opacity ${isDragging ? 'opacity-50 pointer-events-none' : ''}`}
-            style={{
-                ...positionStyle,
-                width: 'calc(100% - 8px)',
-            }}
-        >
-            <EventCard event={event} isDragging={isDragging} />
-        </div>
+        <>
+            {/* Original card - stays in place, hidden during drag */}
+            <div
+                ref={cardRef}
+                onMouseDown={handleMouseDown}
+                className={`absolute cursor-grab active:cursor-grabbing ${isDragging ? 'opacity-30' : ''}`}
+                style={positionStyle}
+            >
+                <EventCard event={event} isDragging={false} />
+            </div>
+
+            {/* Drag clone - follows cursor */}
+            {isDragging && dragPosition && originalRect && (
+                <div
+                    className="fixed z-[9999] pointer-events-none opacity-90 shadow-2xl"
+                    style={{
+                        left: (containerRef.current?.getBoundingClientRect().left || 0) + 60 + dragPosition.x + 4,
+                        top: (containerRef.current?.getBoundingClientRect().top || 0) + dragPosition.y,
+                        width: (originalRect?.width || 100) - 8,
+                        height: originalRect?.height,
+                    }}
+                >
+                    <EventCard event={event} isDragging={true} />
+                </div>
+            )}
+        </>
     );
 };
 
@@ -763,11 +776,10 @@ function Dashboard() {
                                                     onMove={handleMoveEvent}
                                                     weekDays={weekDays}
                                                     style={{
-                                                        left: `${leftPercent}%`,
-                                                        width: `${dayWidth}%`,
+                                                        left: `calc(${leftPercent}% + 4px)`,
+                                                        width: `calc(${dayWidth}% - 8px)`,
                                                         top: `${topOffset}px`,
                                                         height: `${Math.max(height, 30)}px`,
-                                                        padding: '0 4px',
                                                         pointerEvents: 'auto',
                                                     }}
                                                 />

@@ -173,16 +173,15 @@ class ZaiClient:
         self.available = True
     
     async def check_health(self) -> bool:
-        """Check if Z.ai API is available"""
-        try:
-            # Simple health check - try to list models
-            self.client.models.list()
-            self.available = True
-            return True
-        except Exception as e:
-            print(f"Z.ai health check failed: {e}")
+        """Check if Z.ai API is configured and available"""
+        if not self.client.api_key:
             self.available = False
             return False
+            
+        # Instead of calling models.list() which can fail on certain Z.ai endpoints,
+        # we assume availability if key is present. The first actual request will verify.
+        self.available = True
+        return True
     
     def generate_structured_sync(
         self,
