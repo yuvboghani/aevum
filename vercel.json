@@ -19,7 +19,15 @@
             "destination": "/api/index.py"
         },
         {
+            "source": "/aevum/api/(.*)",
+            "destination": "/api/index.py"
+        },
+        {
             "source": "/login",
+            "destination": "/api/index.py"
+        },
+        {
+            "source": "/aevum/login",
             "destination": "/api/index.py"
         },
         {
@@ -27,7 +35,15 @@
             "destination": "/api/index.py"
         },
         {
+            "source": "/aevum/callback",
+            "destination": "/api/index.py"
+        },
+        {
             "source": "/busy",
+            "destination": "/api/index.py"
+        },
+        {
+            "source": "/aevum/busy",
             "destination": "/api/index.py"
         },
         {
@@ -35,7 +51,15 @@
             "destination": "/api/index.py"
         },
         {
+            "source": "/aevum/tasks(.*)",
+            "destination": "/api/index.py"
+        },
+        {
             "source": "/calendars",
+            "destination": "/api/index.py"
+        },
+        {
+            "source": "/aevum/calendars",
             "destination": "/api/index.py"
         },
         {
@@ -43,7 +67,15 @@
             "destination": "/api/index.py"
         },
         {
+            "source": "/aevum/optimize(.*)",
+            "destination": "/api/index.py"
+        },
+        {
             "source": "/ai/(.*)",
+            "destination": "/api/index.py"
+        },
+        {
+            "source": "/aevum/ai/(.*)",
             "destination": "/api/index.py"
         },
         {
@@ -51,7 +83,15 @@
             "destination": "/api/index.py"
         },
         {
+            "source": "/aevum/architect/(.*)",
+            "destination": "/api/index.py"
+        },
+        {
             "source": "/aevum/assets/(.*)",
+            "destination": "/psu-scheduler-client/assets/$1"
+        },
+        {
+            "source": "/aevum/home/assets/(.*)",
             "destination": "/psu-scheduler-client/assets/$1"
         },
         {
@@ -61,6 +101,10 @@
         {
             "source": "/assets/(.*)",
             "destination": "/psu-scheduler-client/assets/$1"
+        },
+        {
+            "source": "/aevum/home/(.*)",
+            "destination": "/psu-scheduler-client/index.html"
         },
         {
             "source": "/aevum/(.*)",
