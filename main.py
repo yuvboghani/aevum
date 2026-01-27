@@ -41,7 +41,8 @@ REDIRECT_URI = os.getenv("OAUTH_REDIRECT_URI", "http://localhost:8000/callback")
 app = FastAPI(
     title="Aevum Scheduler API",
     description="Smart schedule optimization with Google Calendar integration",
-    version="2.1.0"
+    version="2.1.0",
+    root_path="/aevum"
 )
 
 # CORS: Allow frontend to connect
@@ -50,6 +51,8 @@ origins = [
     "http://localhost:3000",
     "http://127.0.0.1:5173",
     "http://127.0.0.1:3000",
+    "https://yuvboghani.com",
+    "https://www.yuvboghani.com",
     os.getenv("FRONTEND_URL", "http://localhost:5173"),
 ]
 
