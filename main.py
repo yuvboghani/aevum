@@ -66,9 +66,25 @@ app.add_middleware(
 
 app.add_middleware(
     SessionMiddleware, 
-    secret_key=os.getenv("SESSION_SECRET", "super_secret_dev_key")
+    secret_key=os.getenv("SESSION_SECRET", "super_secret_dev_key"),
+    max_age=3600,  # 1 hour session
+    same_site="none",  # Allow cross-site redirects (Required for OAuth)
+    https_only=True    # Ensure secure cookies
 )
 
+
+# --- DEBUG & HEALTH ---
+@app.get("/debug-session")
+def debug_session(request: Request):
+    """Debug endpoint to check session persistence"""
+    count = request.session.get("count", 0)
+    request.session["count"] = count + 1
+    return {
+        "status": "Session Check",
+        "session_id": request.session.get("state", "No State"),
+        "count": count,
+        "cookie_settings": "SameSite=None; Secure"
+    }
 
 # --- PYDANTIC SCHEMAS ---
 class WorkTypeEnum(str, Enum):
