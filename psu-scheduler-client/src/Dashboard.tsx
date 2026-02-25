@@ -252,16 +252,17 @@ const DraggableEvent: React.FC<DraggableEventProps> = ({ event, style: positionS
                 return;
             }
 
-            const relativeX = e.clientX - gridRect.left - dragOffset.x - 60;
-            const relativeY = e.clientY - gridRect.top - dragOffset.y;
+            // Calculate card's top-left position (where top edge actually is)
+            const cardTopEdgeY = e.clientY - gridRect.top - dragOffset.y;
+            const cardCenterX = e.clientX - gridRect.left - dragOffset.x - 60 + (originalRect?.width || 0) / 2;
 
-            // Calculate target day
+            // Calculate target day based on card center X
             const dayWidth = (gridRect.width - 60) / weekDays.length;
-            const dayIndex = Math.max(0, Math.min(weekDays.length - 1, Math.floor((relativeX + dayWidth / 2) / dayWidth)));
+            const dayIndex = Math.max(0, Math.min(weekDays.length - 1, Math.floor(cardCenterX / dayWidth)));
             const targetDay = weekDays[dayIndex];
 
-            // Calculate target time (snap to 15 min)
-            const minutesFromStart = Math.max(0, relativeY);
+            // Calculate target time based on TOP EDGE of card (snap to 15 min)
+            const minutesFromStart = Math.max(0, cardTopEdgeY);
             const snappedMinutes = Math.round(minutesFromStart / 15) * 15;
             const hours = Math.floor(snappedMinutes / 60) + START_HOUR;
             const mins = snappedMinutes % 60;

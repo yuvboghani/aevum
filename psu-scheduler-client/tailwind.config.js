@@ -7,6 +7,10 @@ export default {
     theme: {
         extend: {
             colors: {
+                // ── Showcase palette ──
+                'charcoal': '#1a1a1a',
+                'paper': '#f5f5f0',
+                'safety-orange': '#ff4d00',
                 // Penn State colors
                 'nittany-navy': '#041E42',
                 'beaver-blue': '#1E407C',
@@ -51,6 +55,7 @@ export default {
             },
             fontFamily: {
                 'sans': ['Inter', 'system-ui', 'sans-serif'],
+                'mono': ['"JetBrains Mono"', 'ui-monospace', 'monospace'],
                 'script': ['Caveat', 'Brush Script MT', 'cursive'],
                 'typewriter': ['Special Elite', 'Courier New', 'monospace'],
                 'stencil': ['Russo One', 'Impact', 'sans-serif'],

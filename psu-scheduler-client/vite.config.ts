@@ -8,5 +8,5 @@ export default defineConfig({
         react(),
         checker({ typescript: true })
     ],
-    base: '/aevum/home/', // Subpath deployment on yuvboghani.com/aevum/home
+    base: '/aevum/', // Subpath deployment on yuvboghani.com/aevum
 });
